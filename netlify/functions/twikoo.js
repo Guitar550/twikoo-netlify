@@ -1,27 +1,39 @@
-const twikooHandler = require('twikoo-netlify').handler;
+const twikoo = require('twikoo-netlify');
 
-exports.handler = async (event, context) => {
-      // 处理 OPTIONS 预检请求
-      if (event.httpMethod === 'OPTIONS') {
-                return {
-                              statusCode: 200,
-                              headers: {
-                                                'Access-Control-Allow-Origin': '*',
-                                                'Access-Control-Allow-Headers': 'Content-Type',
-                                                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-                              },
-                              body: ''
-                };
-      }
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Max-Age': '86400'
+};
 
-      // 调用原始的 Twikoo handler
-      const response = await twikooHandler(event, context);
+exports.handler = (event, context, callback) => {
+    if (event.httpMethod === 'OPTIONS') {
+        callback(null, {
+            statusCode: 200,
+            headers: CORS_HEADERS,
+            body: ''
+        });
+        return;
+    }
 
-      // 添加 CORS 头
-      response.headers = response.headers || {};
-      response.headers['Access-Control-Allow-Origin'] = '*';
-      response.headers['Access-Control-Allow-Headers'] = 'Content-Type';
-      response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
+    const originalCallback = (error, response) => {
+        if (error) {
+            callback(error);
+            return;
+        }
+        response.headers = Object.assign({}, response.headers, CORS_HEADERS);
+        callback(null, response);
+    };
 
-      return response;
+    const result = twikoo.handler(event, context, originalCallback);
+
+    if (result && typeof result.then === 'function') {
+        result.then(response => {
+            response.headers = Object.assign({}, response.headers, CORS_HEADERS);
+            callback(null, response);
+        }).catch(error => {
+            callback(error);
+        });
+    }
 };
